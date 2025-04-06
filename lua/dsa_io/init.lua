@@ -17,7 +17,42 @@ local function setup_files()
 	end
 end
 
+-- Function to paste clipboard content to input file
+local function paste_to_input_file()
+	-- Get clipboard content
+	local clipboard_content = vim.fn.getreg("+")
+
+	-- If empty, try system clipboard
+	if clipboard_content == "" then
+		clipboard_content = vim.fn.getreg("*")
+	end
+
+	if clipboard_content ~= "" then
+		-- Split content into lines
+		local lines = {}
+		for line in string.gmatch(clipboard_content, "[^\r\n]+") do
+			table.insert(lines, line)
+		end
+
+		-- Write to input file
+		vim.fn.writefile(lines, M.input_file)
+		print("Clipboard content pasted to input file")
+
+		-- Refresh the input buffer if it's open
+		if M.splits_open and vim.api.nvim_win_is_valid(M.win_ids.input) then
+			vim.api.nvim_win_call(M.win_ids.input, function()
+				vim.cmd("edit!")
+			end)
+		end
+	else
+		print("Clipboard is empty")
+	end
+end
+
 local function open_io_splits()
+	-- Paste clipboard content to input file first
+	paste_to_input_file()
+
 	-- Vertical split (25% width)
 	vim.cmd("botright vnew")
 	local right_win = vim.api.nvim_get_current_win()
@@ -39,14 +74,13 @@ local function open_io_splits()
 
 	-- Track window IDs
 	M.win_ids = {
-		input = vim.api.nvim_get_current_win(), -- Output split
-		output = vim.fn.win_getid(vim.fn.winnr("j")), -- Input split (above current)
+		input = vim.fn.win_getid(vim.fn.winnr("j")), -- Input split (below current)
+		output = vim.api.nvim_get_current_win(), -- Output split (current)
 		main = vim.fn.win_getid(vim.fn.winnr("#")), -- Main coding window
 	}
 
 	-- Adjust height (50% each inside the right split)
 	vim.api.nvim_win_set_height(M.win_ids.output, math.floor(vim.o.lines * 0.5))
-
 	M.splits_open = true
 end
 
@@ -66,6 +100,11 @@ M.toggle_io_splits = function()
 	else
 		open_io_splits()
 	end
+end
+
+-- Add standalone paste function
+M.paste_clipboard_to_input = function()
+	paste_to_input_file()
 end
 
 M.run_cpp_with_gpp = function()
@@ -102,6 +141,13 @@ M.setup = function()
 		"n",
 		"<leader>rr",
 		":lua require('dsa_io').run_cpp_with_gpp()<CR>",
+		{ noremap = true, silent = true }
+	)
+	-- Add separate keybinding for just pasting to input file without toggling split
+	vim.api.nvim_set_keymap(
+		"n",
+		"<leader>ip",
+		":lua require('dsa_io').paste_clipboard_to_input()<CR>",
 		{ noremap = true, silent = true }
 	)
 end
